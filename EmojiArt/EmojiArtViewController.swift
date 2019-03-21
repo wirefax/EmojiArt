@@ -8,7 +8,9 @@
 
 import UIKit
 
-class EmojiArtViewController: UIViewController, UIDropInteractionDelegate {
+class EmojiArtViewController: UIViewController, UIDropInteractionDelegate,                                 UIScrollViewDelegate, UICollectionViewDelegate, UICollectionViewDataSource, UICollectionViewFlowLayout {
+    
+    
 
     //Зона сброса после drag-n-drop
     //Добавляем немного интерактива в виде UIDropInteraction и делаем себя (контроллер) делегатом
@@ -17,6 +19,52 @@ class EmojiArtViewController: UIViewController, UIDropInteractionDelegate {
             dropZone.addInteraction(UIDropInteraction(delegate: self))
         }
     }
+    
+    @IBOutlet weak var scrollViewWidth: NSLayoutConstraint!
+    @IBOutlet weak var scrollViewHeight: NSLayoutConstraint!
+    
+    func scrollViewDidZoom(_ scrollView: UIScrollView) {
+        scrollViewHeight.constant = scrollView.contentSize.height
+        scrollViewWidth.constant = scrollView.contentSize.width
+    }
+    
+    var emojiArtView = EmojiArtView()
+    
+    //Зона рисовки фонового изображения
+    @IBOutlet weak var scrollView: UIScrollView! {
+        didSet {
+            scrollView.minimumZoomScale = 0.1
+            scrollView.maximumZoomScale = 5.0
+            scrollView.delegate = self
+            scrollView.addSubview(emojiArtView)
+        }
+    }
+    
+    func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+    return emojiArtView
+    }
+    
+    var emojiArtBackgroundImage: UIImage? {
+        get {
+            return emojiArtView.backgroundImage
+        }
+        set {
+            scrollView?.zoomScale = 1.0
+            emojiArtView.backgroundImage = newValue
+            let size = newValue?.size ?? CGSize.zero
+            emojiArtView.frame = CGRect (origin: CGPoint.zero, size: size)
+            scrollView?.contentSize = size
+            scrollViewWidth?.constant = size.width
+            scrollViewHeight?.constant = size.height
+            
+            if let dropZone = self.dropZone, size.width > 0, size.height > 0 {
+                scrollView?.zoomScale = max(dropZone.bounds.size.width / size.width, dropZone.bounds.size.height / size.height)
+            }
+        }
+    }
+    
+    
+    var imageFetcher: ImageFetcher!
     
     //Реализовываем необязательные методы из протокола UIDropInteractionDelegate
     //Они необходимы нам для того чтобы наш Drop заработал
@@ -35,7 +83,7 @@ class EmojiArtViewController: UIViewController, UIDropInteractionDelegate {
     func dropInteraction(_ interaction: UIDropInteraction, performDrop session: UIDropSession) {
         imageFetcher = ImageFetcher() { (url, image) in //Так как после выборки данных imageFetcher не находится на main.queue то возращаемся туда
             DispatchQueue.main.async {
-                self.emojiArtView.backgroundImage = image
+                self.emojiArtBackgroundImage = image
             }
         }
         session.loadObjects(ofClass: NSURL.self) {nsurls in
@@ -51,9 +99,28 @@ class EmojiArtViewController: UIViewController, UIDropInteractionDelegate {
         
     }
     
-    var imageFetcher: ImageFetcher!
+    //Модель с эмоджи для коллекции
     
-    //Зона рисовки фонового изображения
-    @IBOutlet weak var emojiArtView: EmojiArtView!
+    var emojis = "🔴🌞🌜🌗🌈🌏🌧❄️🌬✈️🎈".map {String($0)}
+    //CollectionView - обязательные методы из протокола дата сорс
+    
+    @IBOutlet weak var emojiCollectionView: UICollectionView! {
+        didSet {
+            emojiCollectionView.dataSource = self
+            emojiCollectionView.delegate = self
+        }
+    }
+    
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        return emojis.count
+    }
+    
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: "EmojiCell", for: indexPath)
+        return cell
+    }
+    
+    
+    
     
 }
